@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using CoffeeCard.WebApi.Helpers;
 using CoffeeCard.WebApi.Models.DataTransferObjects.MobilePay;
 using CoffeeCard.WebApi.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -13,10 +14,12 @@ namespace CoffeeCard.WebApi.Controllers
     public class MobilePayController : ControllerBase
     {
         private readonly IPurchaseService _purchaseService;
+        private readonly ClaimsUtilities _claimsUtilities;
 
-        public MobilePayController(IPurchaseService purchaseService)
+        public MobilePayController(IPurchaseService purchaseService, ClaimsUtilities claimsUtilities)
         {
             _purchaseService = purchaseService;
+            _claimsUtilities = claimsUtilities;
         }
 
         /// <summary>
@@ -35,7 +38,8 @@ namespace CoffeeCard.WebApi.Controllers
         [HttpPost("complete")]
         public async Task<IActionResult> CompletePurchase(CompletePurchaseDto dto)
         {
-            await _purchaseService.CompletePurchase(dto, User.Claims);
+            var user = await _claimsUtilities.ValidateAndReturnUserFromClaimAsync(User.Claims);
+            await _purchaseService.CompletePurchase(dto, user);
             return Ok(new {Message = "The purchase was completed with success!"});
         }
     }

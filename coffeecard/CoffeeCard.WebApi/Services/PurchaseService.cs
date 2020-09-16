@@ -131,15 +131,8 @@ namespace CoffeeCard.WebApi.Services
             return purchase;
         }
 
-        public Purchase DeliverProduct(CompletePurchaseDto completeDto, IEnumerable<Claim> claims)
+        public Purchase DeliverProduct(CompletePurchaseDto completeDto, User user)
         {
-            var userId = claims.FirstOrDefault(x => x.Type == Constants.UserId);
-            if (userId == null) throw new ApiException("The token is invalid!", 401);
-            var id = int.Parse(userId.Value);
-
-            var user = _context.Users.Include(x => x.Purchases).FirstOrDefault(x => x.Id == id);
-            if (user == null) throw new ApiException("The user could not be found");
-
             var purchase = user.Purchases.FirstOrDefault(x => x.OrderId == completeDto.OrderId);
             if (purchase == null) throw new ApiException("Purchase could not be found");
 
@@ -216,10 +209,9 @@ namespace CoffeeCard.WebApi.Services
             return orderId;
         }
 
-        public async Task<Purchase> CompletePurchase(CompletePurchaseDto dto, IEnumerable<Claim> claims)
+        public async Task<Purchase> CompletePurchase(CompletePurchaseDto dto, User user)
         {
-            Log.Information(
-                $"Trying to complete purchase with orderid: {dto.OrderId} and transactionId: {dto.TransactionId}");
+            Log.Information($"Trying to complete purchase with orderid: {dto.OrderId} and transactionId: {dto.TransactionId}");
             try
             {
                 //TODO Figure out the purpose of this check, and probably fix it in regard to test environment
@@ -257,7 +249,7 @@ namespace CoffeeCard.WebApi.Services
                 throw new ApiException("Failed to complete purchase using MobilePay", 400);
             }
 
-            var purchase = DeliverProduct(dto, claims);
+            var purchase = DeliverProduct(dto, user);
             SendInvoiceEmail(purchase);
 
             Log.Information(
@@ -266,44 +258,27 @@ namespace CoffeeCard.WebApi.Services
             return purchase;
         }
 
-        /*  //TODO Reimplement
         public async Task CheckIncompletePurchases(User user)
         {
-            var incompletePurchases = user.Purchases.Where(x => !x.Completed).ToList();
-            Log.Information($"Checking {incompletePurchases.Count} purchases against mobilepay");
+            // Find incomplete purchases which was created within the last 24 hours
+            var incompletePurchases = user.Purchases.Where(p => !p.Completed 
+                                                                && p.DateCreated > DateTime.UtcNow.AddDays(-1)).ToList();
+
+            Log.Information("User={userId} has {count} incomplete purchases from the last 24 hours", user.Id, incompletePurchases.Count);
+            
             foreach (var purchase in incompletePurchases)
             {
-                var response = await ValidateTransactionWithoutId(purchase.OrderId);
-                if (response != null)
-                {
-                    if (response.IsSuccessStatusCode)
-                    {
-                        var status = await response.Content.ReadAsAsync<MobilePayPaymentStatusDTO>();
-                        if (status.LatestPaymentStatus.Equals("Captured") &&
-                            status.OriginalAmount.Equals(purchase.Price))
-                        {
-                            var transactionId = status.TransactionId;
-                            DeliverProductToUser(purchase, user, transactionId);
-                        }
-                        else if (status.LatestPaymentStatus.Equals("Rejected"))
-                        {
-                            _context.Purchases.Remove(purchase);
-                        }
-                    }
-                    else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                    {
-                        _context.Purchases.Remove(purchase);
-                    }
-                }
-            }
-            _context.SaveChanges();
-        }
+                var paymentStatus = await _mobilePayService.GetPaymentStatus(purchase.OrderId);
+                Log.Information("OrderId={id}, MPTransactionId={transactionId} has paymentStatus {status} at MobilePay", purchase.OrderId, paymentStatus.LatestPaymentStatus);
 
-        public async Task<HttpResponseMessage> ValidateTransactionWithoutId(string orderId)
-        {
-            var response = await _mobilePayService.CapturePayment(orderId);
-            return response;
-        }*/
+                await CompletePurchase(new CompletePurchaseDto() 
+                    {
+                        OrderId = purchase.OrderId,
+                        TransactionId = paymentStatus.TransactionId
+                    }
+                , user);
+            }
+        }
 
         public Purchase IssueProduct(IssueProductDto issueProduct)
         {
@@ -361,7 +336,7 @@ namespace CoffeeCard.WebApi.Services
 
         private async Task<PaymentStatus> ValidateTransaction(CompletePurchaseDto payment)
         {
-            var purchase = _context.Purchases.FirstOrDefault(x => x.OrderId == payment.OrderId);
+            var purchase = await _context.Purchases.FirstOrDefaultAsync(x => x.OrderId == payment.OrderId);
 
             if (purchase == null)
                 throw new ApiException($"The purchase with orderId {payment.OrderId} does not exist", 400);

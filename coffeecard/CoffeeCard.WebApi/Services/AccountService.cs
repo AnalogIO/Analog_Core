@@ -23,9 +23,10 @@ namespace CoffeeCard.WebApi.Services
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ITokenService _tokenService;
         private readonly ILoginLimiter _loginLimiter;
+        private readonly IPurchaseService _purchaseService;
 
         public AccountService(CoffeeCardContext context, EnvironmentSettings environmentSettings, ITokenService tokenService,
-            IEmailService emailService, IHashService hashService, IHttpContextAccessor httpContextAccessor, ILoginLimiter loginLimiter, LoginLimiterSettings loginLimiterSettings)
+            IEmailService emailService, IHashService hashService, IHttpContextAccessor httpContextAccessor, ILoginLimiter loginLimiter, LoginLimiterSettings loginLimiterSettings, IPurchaseService purchaseService)
         {
             _context = context;
             _environmentSettings = environmentSettings;
@@ -35,6 +36,7 @@ namespace CoffeeCard.WebApi.Services
             _httpContextAccessor = httpContextAccessor;
             _loginLimiter = loginLimiter;
             _loginLimiterSettings = loginLimiterSettings;
+            _purchaseService = purchaseService;
         }
 
         public string Login(string username, string password, string version)
@@ -64,10 +66,10 @@ namespace CoffeeCard.WebApi.Services
                     };
                     var token = _tokenService.GenerateToken(claims);
 
-                    // check for incomplete purchases //TODO Fix this and reimplement
-                    //_purchaseService.CheckIncompletePurchases(user);
+                    //check for incomplete purchases
+                    _purchaseService.CheckIncompletePurchases(user);
 
-                    _loginLimiter.ResetLoginAttemptsForUser(user);
+                   _loginLimiter.ResetLoginAttemptsForUser(user);
 
                     return token;
                 }
