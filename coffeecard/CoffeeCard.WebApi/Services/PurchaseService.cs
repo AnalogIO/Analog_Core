@@ -34,57 +34,6 @@ namespace CoffeeCard.WebApi.Services
             _mapper = mapper;
         }
 
-        public bool Delete(int id)
-        {
-            var purchase = _context.Purchases.Find(id);
-            if (purchase != null)
-            {
-                _context.Purchases.Remove(purchase);
-                return _context.SaveChanges() > 0;
-            }
-
-            return false;
-        }
-
-        public Purchase Read(string orderId)
-        {
-            return _context.Purchases.FirstOrDefault(x => x.OrderId == orderId);
-        }
-
-        public IEnumerable<Purchase> Read(DateTime from, DateTime to)
-        {
-            return _context.Purchases.Where(x => x.DateCreated >= from && x.DateCreated <= to).AsEnumerable();
-        }
-
-        public IEnumerable<Purchase> Read(DateTime from)
-        {
-            return _context.Purchases.Where(x => x.DateCreated >= from).AsEnumerable();
-        }
-
-        public int Update(Purchase purchase)
-        {
-            _context.Purchases.Attach(purchase);
-            return _context.SaveChanges();
-        }
-
-        public void Update()
-        {
-            var purchases = _context.Purchases.Where(x => x.PurchasedBy == null).ToList();
-            _context.Purchases.RemoveRange(purchases);
-            _context.SaveChanges();
-        }
-
-        public bool DeleteRange(List<Purchase> purchases)
-        {
-            _context.Purchases.RemoveRange(purchases);
-            return _context.SaveChanges() > 0;
-        }
-
-        public Purchase GetPurchase(int id)
-        {
-            return _context.Purchases.FirstOrDefault(x => x.Id == id);
-        }
-
         public IEnumerable<Purchase> GetPurchases(IEnumerable<Claim> claims)
         {
             var userId = claims.FirstOrDefault(x => x.Type == Constants.UserId);
@@ -131,7 +80,7 @@ namespace CoffeeCard.WebApi.Services
             return purchase;
         }
 
-        public Purchase DeliverProduct(CompletePurchaseDto completeDto, User user)
+        private Purchase DeliverProduct(CompletePurchaseDto completeDto, User user)
         {
             var purchase = user.Purchases.FirstOrDefault(x => x.OrderId == completeDto.OrderId);
             if (purchase == null) throw new ApiException("Purchase could not be found");
@@ -142,7 +91,7 @@ namespace CoffeeCard.WebApi.Services
             return DeliverProductToUser(purchase, user, completeDto.TransactionId);
         }
 
-        public Purchase DeliverProductToUser(Purchase purchase, User user, string transactionId)
+        private Purchase DeliverProductToUser(Purchase purchase, User user, string transactionId)
         {
             Log.Information(
                 $"Delivering product ({purchase.ProductId}) to userId: {user.Id} with orderId: {purchase.OrderId}");
